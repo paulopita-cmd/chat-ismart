@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8">
+  <title>Chat Ismart</title>
+</head>
+<body>
+  <h1>Agente de Banca Ismart</h1>
+  <form id="chat-form">
+    <input type="text" name="message" placeholder="Escreva aqui..." style="width: 300px;">
+    <button type="submit">Enviar</button>
+  </form>
+  <div id="chatbox"></div>
+
+  <script>
+    const form = document.getElementById("chat-form");
+    form.onsubmit = async (e) => {
+      e.preventDefault();
+      const formData = new FormData(form);
+      const response = await fetch("/chat", { method: "POST", body: formData });
+      const reply = await response.text();
+      document.getElementById("chatbox").innerHTML += "<p><b>Banca:</b> " + reply + "</p>";
+    };
+  </script>
+</body>
+</html>
