@@ -1,113 +1,113 @@
+
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simulador de Banca - Ismart</title>
-    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
-    <style>
-        body {
-            font-family: 'Montserrat', sans-serif;
-            background-color: #f4f4f4;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-        .container {
-            background: white;
-            padding: 20px 30px;
-            border-radius: 12px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-            width: 100%;
-            max-width: 600px;
-            text-align: center;
-        }
-        img {
-            width: 120px;
-            margin-bottom: 15px;
-        }
-        h1 {
-            margin-bottom: 20px;
-            font-size: 22px;
-            color: #333;
-        }
-        #chatbox {
-            border: 1px solid #ddd;
-            padding: 10px;
-            border-radius: 8px;
-            background: #fafafa;
-            height: 300px;
-            overflow-y: auto;
-            text-align: left;
-            margin-bottom: 15px;
-        }
-        #chatbox p {
-            margin: 5px 0;
-        }
-        #chatbox .user { color: #1a73e8; font-weight: 600; }
-        #chatbox .bot { color: #0f9d58; font-weight: 600; }
-        input[type=text] {
-            width: 80%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-        }
-        button {
-            padding: 10px 16px;
-            background: #1a73e8;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            margin-left: 5px;
-        }
-        button:hover {
-            background: #1669c1;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Simulador de Banca - Ismart</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <div class="container">
-        <img src="https://www.ismart.org.br/wp-content/uploads/2022/03/ISMART_logo.svg" alt="Ismart Logo">
-        <h1>Simulador de Banca - Ismart</h1>
-        <div id="chatbox"></div>
-        <input type="text" id="message" placeholder="Digite aqui..." onkeypress="if(event.key==='Enter'){sendMessage()}">
-        <button onclick="sendMessage()">Enviar</button>
+  <div class="container">
+    <img src="https://www.ismart.org.br/wp-content/uploads/2022/03/ISMART_logo.svg" alt="Ismart" class="logo"/>
+
+    <h1>Simulador de Banca - Ismart</h1>
+
+    <div id="welcome" class="welcome">
+      <p>Olá! Bem-vindo ao seu treino de Projeto de Vida no Ismart.<br/>
+      Aqui você pode ensaiar sua apresentação como se estivesse diante de uma banca avaliadora.<br/>
+      Escolha o perfil da banca para treinar hoje:</p>
+
+      <div class="profiles">
+        <button data-profile="academico">1) Rigor Acadêmico</button>
+        <button data-profile="acolhedora">2) Acolhedora</button>
+        <button data-profile="desafiadora">3) Desafiadora</button>
+      </div>
     </div>
 
-    <script>
-        async function sendMessage() {
-            const msg = document.getElementById("message").value;
-            if (!msg) return;
-            const chatbox = document.getElementById("chatbox");
-            chatbox.innerHTML += `<p class='user'>Você: ${msg}</p>`;
-            document.getElementById("message").value = "";
+    <div id="chat-area" class="hidden">
+      <div id="chatbox" class="chatbox"></div>
+      <div class="input-row">
+        <input type="text" id="message" placeholder="Digite aqui..." />
+        <button id="send">Enviar</button>
+      </div>
+    </div>
+  </div>
 
-            const response = await fetch("/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: msg })
-            });
+  <script>
+    const welcome = document.getElementById('welcome');
+    const chatArea = document.getElementById('chat-area');
+    const chatbox = document.getElementById('chatbox');
+    const sendBtn = document.getElementById('send');
+    const input = document.getElementById('message');
 
-            const data = await response.json();
-            typeText(`Banca: ${data.reply}`, chatbox);
+    // Seleção de perfil
+    document.querySelectorAll('.profiles button').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const profile = btn.dataset.profile;
+        const res = await fetch('/select_profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ profile })
+        });
+        const data = await res.json();
+        if (data.ok) {
+          welcome.classList.add('hidden');
+          chatArea.classList.remove('hidden');
+          addMsg('bot', 'Perfil selecionado. Você pode colar seu texto e eu começo pelo Bloco 1. ✨');
+        } else {
+          alert('Erro ao selecionar perfil.');
         }
+      });
+    });
 
-        function typeText(text, container) {
-            let i = 0;
-            const interval = setInterval(() => {
-                if (i < text.length) {
-                    container.innerHTML += text.charAt(i);
-                    i++;
-                } else {
-                    clearInterval(interval);
-                    container.innerHTML += "<br>";
-                    container.scrollTop = container.scrollHeight;
-                }
-            }, 30);
+    // Envio de mensagem
+    sendBtn.addEventListener('click', sendMessage);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendMessage();
+      }
+    });
+
+    function addMsg(role, text, typing=true) {
+      const p = document.createElement('p');
+      p.className = role;
+      chatbox.appendChild(p);
+      if (role === 'user' || !typing) {
+        p.textContent = (role === 'user' ? 'Você: ' : 'Banca: ') + text;
+      } else {
+        // efeito typing
+        let i = 0;
+        function type() {
+          if (i === 0) p.innerHTML = '<strong>Banca:</strong> ';
+          if (i < text.length) {
+            p.innerHTML += text.charAt(i);
+            i++;
+            setTimeout(type, 18);
+            chatbox.scrollTop = chatbox.scrollHeight;
+          }
         }
-    </script>
+        type();
+      }
+      chatbox.scrollTop = chatbox.scrollHeight;
+    }
+
+    async function sendMessage() {
+      const msg = input.value.trim();
+      if (!msg) return;
+      addMsg('user', msg, false);
+      input.value = '';
+
+      const res = await fetch('/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg })
+      });
+      const data = await res.json();
+      addMsg('bot', data.reply || 'Erro ao responder.', true);
+    }
+  </script>
 </body>
 </html>
