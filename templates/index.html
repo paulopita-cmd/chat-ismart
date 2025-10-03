@@ -1,67 +1,73 @@
 <!DOCTYPE html>
-<html lang="pt-BR">
+<html lang="pt-br">
 <head>
-  <meta charset="UTF-8">
-  <title>Simulador de Banca - Ismart</title>
-  <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    .chat-box { border: 1px solid #ccc; padding: 10px; width: 600px; margin: auto; }
-    .user { color: blue; }
-    .bot { color: green; }
-  </style>
+    <meta charset="UTF-8">
+    <title>Simulador de Banca - Ismart</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-  <div class="chat-box">
-    <img src="https://www.ismart.org.br/wp-content/uploads/2022/03/ISMART_logo.svg" width="150">
-    <h2>Simulador de Banca - Ismart</h2>
+    <div class="chat-container">
+        <img src="https://www.ismart.org.br/wp-content/uploads/2022/03/ISMART_logo.svg" class="logo">
+        <h2>Simulador de Banca</h2>
+        <div id="chat-box"></div>
+        <form id="chat-form">
+            <textarea id="message" placeholder="Digite aqui..." rows="2"></textarea>
+            <button type="submit">Enviar</button>
+        </form>
+    </div>
 
-    <label for="profile">Escolha o estilo da banca:</label>
-    <select id="profile">
-      <option value="academico">🎓 Rigor Acadêmico</option>
-      <option value="acolhedora" selected>🤝 Acolhedora</option>
-      <option value="desafiadora">🔥 Desafiadora</option>
-    </select>
+    <script>
+        const chatBox = document.getElementById("chat-box");
+        const form = document.getElementById("chat-form");
+        const messageInput = document.getElementById("message");
 
-    <div id="chat"></div>
+        function appendMessage(sender, text, typing=false) {
+            let msgDiv = document.createElement("div");
+            msgDiv.classList.add(sender);
+            chatBox.appendChild(msgDiv);
 
-    <input type="text" id="message" placeholder="Digite aqui..." style="width:80%;">
-    <button onclick="sendMessage()">Enviar</button>
-    <audio id="audioPlayer" controls hidden></audio>
-  </div>
+            if (typing) {
+                let i = 0;
+                function typeWriter() {
+                    if (i < text.length) {
+                        msgDiv.textContent += text.charAt(i);
+                        i++;
+                        setTimeout(typeWriter, 30);
+                        chatBox.scrollTop = chatBox.scrollHeight;
+                    }
+                }
+                typeWriter();
+            } else {
+                msgDiv.textContent = text;
+            }
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
 
-  <script>
-    document.getElementById("message").addEventListener("keypress", function(e) {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        sendMessage();
-      }
-    });
+        form.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const message = messageInput.value.trim();
+            if (!message) return;
 
-    async function sendMessage() {
-      const msg = document.getElementById("message").value;
-      const profile = document.getElementById("profile").value;
-      if (!msg) return;
+            appendMessage("user", "Você: " + message);
+            messageInput.value = "";
 
-      document.getElementById("chat").innerHTML += "<p class='user'>Você: " + msg + "</p>";
-      document.getElementById("message").value = "";
+            const response = await fetch("/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message })
+            });
 
-      const response = await fetch("/chat", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({message: msg, profile: profile})
-      });
+            const data = await response.json();
+            appendMessage("bot", "Banca: " + data.reply, true);
+        });
 
-      const data = await response.json();
-      if (data.reply) {
-        document.getElementById("chat").innerHTML += "<p class='bot'>Banca: " + data.reply + "</p>";
-      }
-      if (data.audio_url) {
-        const player = document.getElementById("audioPlayer");
-        player.src = data.audio_url;
-        player.hidden = false;
-        player.play();
-      }
-    }
-  </script>
+        // Enviar com Enter
+        messageInput.addEventListener("keydown", function(e) {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                form.dispatchEvent(new Event("submit"));
+            }
+        });
+    </script>
 </body>
 </html>
