@@ -1,127 +1,67 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <title>Simulador de Banca - Ismart</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f9f9f9;
-            color: #333;
-            text-align: center;
-            margin: 0;
-            padding: 0;
-        }
-        header {
-            background: #004080;
-            padding: 20px;
-        }
-        header img {
-            height: 60px;
-        }
-        #chat-container {
-            width: 70%;
-            margin: 20px auto;
-            background: #fff;
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 0 8px rgba(0,0,0,0.1);
-        }
-        .message {
-            text-align: left;
-            margin: 10px 0;
-        }
-        .user {
-            color: #004080;
-            font-weight: bold;
-        }
-        .bot {
-            color: #333;
-        }
-        input[type=text] {
-            width: 70%;
-            padding: 10px;
-            border: 1px solid #ccc;
-            border-radius: 6px;
-        }
-        button {
-            padding: 10px 15px;
-            border: none;
-            border-radius: 6px;
-            background: #004080;
-            color: white;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #0066cc;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <title>Simulador de Banca - Ismart</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f7f7f7; padding: 20px; }
+    .chat-box { width: 600px; margin: auto; background: #fff; padding: 20px; border-radius: 10px; }
+    .ismart-logo { width: 120px; display: block; margin: auto; }
+    .message { margin: 10px 0; }
+    .user { font-weight: bold; color: #1a73e8; }
+    .assistant { color: #444; }
+  </style>
 </head>
 <body>
-    <header>
-        <img src="https://www.ismart.org.br/wp-content/uploads/2022/03/ISMART_logo.svg" alt="Ismart Logo">
-    </header>
+  <div class="chat-box">
+    <img src="https://www.ismart.org.br/wp-content/uploads/2022/03/ISMART_logo.svg" alt="Ismart Logo" class="ismart-logo">
+    <h2>Simulador de Banca - Ismart</h2>
+    <div id="chat"></div>
+    <input id="message" placeholder="Digite sua mensagem" size="60">
+    <button onclick="sendMessage()">Enviar</button>
+    <br><br>
+    <button onclick="startRecording()">🎤 Gravar</button>
+    <audio id="audioPlayer" controls></audio>
+  </div>
 
-    <div id="chat-container">
-        <div id="chat"></div>
-        <br>
-        <input type="text" id="message" placeholder="Digite sua mensagem...">
-        <button onclick="sendMessage()">Enviar</button>
-        <button onclick="recordAudio()">🎤 Gravar</button>
-        <br><br>
-        <audio id="audioPlayer" controls></audio>
-    </div>
+<script>
+async function sendMessage() {
+  const msg = document.getElementById("message").value;
+  document.getElementById("chat").innerHTML += `<div class="message user">Você: ${msg}</div>`;
+  const response = await fetch("/chat", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({message: msg})
+  });
+  const data = await response.json();
+  document.getElementById("chat").innerHTML += `<div class="message assistant">Banca: ${data.reply}</div>`;
 
-    <script>
-        async function sendMessage() {
-            const msg = document.getElementById("message").value;
-            if (!msg) return;
+  // gerar voz da resposta
+  const ttsResp = await fetch("/tts", {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({text: data.reply})
+  });
+  const ttsData = await ttsResp.json();
+  document.getElementById("audioPlayer").src = ttsData.audio_url;
+}
 
-            const chat = document.getElementById("chat");
-            chat.innerHTML += `<div class='message user'>Você: ${msg}</div>`;
-
-            const response = await fetch("/chat", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({message: msg})
-            });
-            const data = await response.json();
-            chat.innerHTML += `<div class='message bot'>Banca: ${data.reply}</div>`;
-
-            const audioRes = await fetch("/tts", {
-                method: "POST",
-                headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({text: data.reply})
-            });
-            const audioData = await audioRes.json();
-            document.getElementById("audioPlayer").src = audioData.audio_file;
-
-            document.getElementById("message").value = "";
-        }
-
-        async function recordAudio() {
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream);
-            const chunks = [];
-
-            mediaRecorder.ondataavailable = e => chunks.push(e.data);
-            mediaRecorder.onstop = async () => {
-                const blob = new Blob(chunks, { type: "audio/wav" });
-                const formData = new FormData();
-                formData.append("audio", blob, "input.wav");
-
-                const response = await fetch("/stt", {
-                    method: "POST",
-                    body: formData
-                });
-                const data = await response.json();
-
-                document.getElementById("message").value = data.text;
-            };
-
-            mediaRecorder.start();
-            setTimeout(() => mediaRecorder.stop(), 5000);
-        }
-    </script>
+async function startRecording() {
+  const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  const mediaRecorder = new MediaRecorder(stream);
+  let chunks = [];
+  mediaRecorder.ondataavailable = e => chunks.push(e.data);
+  mediaRecorder.onstop = async () => {
+    const blob = new Blob(chunks, { type: "audio/wav" });
+    const formData = new FormData();
+    formData.append("file", blob, "audio.wav");
+    const response = await fetch("/stt", { method: "POST", body: formData });
+    const data = await response.json();
+    document.getElementById("message").value = data.text;
+  };
+  mediaRecorder.start();
+  setTimeout(() => mediaRecorder.stop(), 5000);
+}
+</script>
 </body>
 </html>
