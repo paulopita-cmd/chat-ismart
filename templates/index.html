@@ -1,73 +1,132 @@
 <!DOCTYPE html>
-<html lang="pt-br">
+<html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <title>Simulador de Banca - Ismart</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <meta charset="UTF-8">
+  <title>Simulador de Banca - Ismart</title>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    body {
+      background-color: #f4f4f4;
+      font-family: 'Montserrat', sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .chat-container {
+      width: 600px;
+      background: #fff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 15px;
+    }
+    .logo img {
+      width: 120px;
+    }
+    h1 {
+      font-size: 20px;
+      text-align: center;
+      margin-bottom: 20px;
+      font-weight: 600;
+    }
+    #chat-box {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 10px;
+      height: 350px;
+      overflow-y: auto;
+      margin-bottom: 15px;
+      background: #fafafa;
+    }
+    .user { color: #0066cc; font-weight: 600; }
+    .bot { color: #333; }
+    #message {
+      width: calc(100% - 60px);
+      padding: 10px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+      font-family: 'Montserrat', sans-serif;
+    }
+    #send {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      background: #0066cc;
+      color: #fff;
+      cursor: pointer;
+      font-family: 'Montserrat', sans-serif;
+    }
+    #send:hover {
+      background: #004c99;
+    }
+  </style>
 </head>
 <body>
-    <div class="chat-container">
-        <img src="https://www.ismart.org.br/wp-content/uploads/2022/03/ISMART_logo.svg" class="logo">
-        <h2>Simulador de Banca</h2>
-        <div id="chat-box"></div>
-        <form id="chat-form">
-            <textarea id="message" placeholder="Digite aqui..." rows="2"></textarea>
-            <button type="submit">Enviar</button>
-        </form>
+  <div class="chat-container">
+    <div class="logo">
+      <img src="https://www.ismart.org.br/wp-content/uploads/2022/03/ISMART_logo.svg" alt="Ismart Logo">
     </div>
+    <h1>Simulador de Banca - Ismart</h1>
+    <div id="chat-box"></div>
+    <div>
+      <input type="text" id="message" placeholder="Digite aqui..." onkeydown="checkEnter(event)">
+      <button id="send" onclick="sendMessage()">Enviar</button>
+    </div>
+  </div>
 
-    <script>
-        const chatBox = document.getElementById("chat-box");
-        const form = document.getElementById("chat-form");
-        const messageInput = document.getElementById("message");
-
-        function appendMessage(sender, text, typing=false) {
-            let msgDiv = document.createElement("div");
-            msgDiv.classList.add(sender);
-            chatBox.appendChild(msgDiv);
-
-            if (typing) {
-                let i = 0;
-                function typeWriter() {
-                    if (i < text.length) {
-                        msgDiv.textContent += text.charAt(i);
-                        i++;
-                        setTimeout(typeWriter, 30);
-                        chatBox.scrollTop = chatBox.scrollHeight;
-                    }
-                }
-                typeWriter();
-            } else {
-                msgDiv.textContent = text;
-            }
-            chatBox.scrollTop = chatBox.scrollHeight;
+  <script>
+    function typeWriterEffect(element, text, speed = 25) {
+      let i = 0;
+      function typing() {
+        if (i < text.length) {
+          element.innerHTML += text.charAt(i);
+          i++;
+          setTimeout(typing, speed);
         }
+      }
+      typing();
+    }
 
-        form.addEventListener("submit", async (e) => {
-            e.preventDefault();
-            const message = messageInput.value.trim();
-            if (!message) return;
+    function appendMessage(role, text) {
+      const chatBox = document.getElementById("chat-box");
+      const p = document.createElement("p");
+      p.className = role;
+      if (role === "user") {
+        p.textContent = "Você: " + text;
+      } else {
+        p.innerHTML = "<b>Banca:</b> ";
+        typeWriterEffect(p, " " + text, 30);
+      }
+      chatBox.appendChild(p);
+      chatBox.scrollTop = chatBox.scrollHeight;
+    }
 
-            appendMessage("user", "Você: " + message);
-            messageInput.value = "";
+    async function sendMessage() {
+      const input = document.getElementById("message");
+      const message = input.value.trim();
+      if (!message) return;
+      appendMessage("user", message);
+      input.value = "";
 
-            const response = await fetch("/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message })
-            });
+      const response = await fetch("/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message })
+      });
+      const data = await response.json();
+      appendMessage("bot", data.reply);
+    }
 
-            const data = await response.json();
-            appendMessage("bot", "Banca: " + data.reply, true);
-        });
-
-        // Enviar com Enter
-        messageInput.addEventListener("keydown", function(e) {
-            if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                form.dispatchEvent(new Event("submit"));
-            }
-        });
-    </script>
+    function checkEnter(e) {
+      if (e.key === "Enter") {
+        sendMessage();
+      }
+    }
+  </script>
 </body>
 </html>
