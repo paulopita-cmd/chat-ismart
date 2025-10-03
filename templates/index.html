@@ -1,111 +1,127 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Agente de Banca Ismart</title>
-  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
-  <style>
-    body { background:#f5f7fb; }
-    .container { max-width:900px; margin-top:30px; }
-    #chat { height:420px; overflow-y:auto; background:white; padding:16px; border-radius:8px; border:1px solid #e0e6ef; }
-    .msg { margin-bottom:12px; }
-    .user { text-align:right; color:#0d6efd; }
-    .agent { text-align:left; color:#198754; }
-    .logo { max-height:60px; }
-  </style>
+    <meta charset="UTF-8">
+    <title>Simulador de Banca - Ismart</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f9f9f9;
+            color: #333;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        header {
+            background: #004080;
+            padding: 20px;
+        }
+        header img {
+            height: 60px;
+        }
+        #chat-container {
+            width: 70%;
+            margin: 20px auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 8px rgba(0,0,0,0.1);
+        }
+        .message {
+            text-align: left;
+            margin: 10px 0;
+        }
+        .user {
+            color: #004080;
+            font-weight: bold;
+        }
+        .bot {
+            color: #333;
+        }
+        input[type=text] {
+            width: 70%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+        }
+        button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            background: #004080;
+            color: white;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0066cc;
+        }
+    </style>
 </head>
 <body>
-  <div class="container">
-    <div class="text-center mb-3">
-      <img class="logo" src="https://www.ismart.org.br/wp-content/uploads/2022/03/ISMART_logo.svg" alt="Ismart Logo">
-      <h3>Simulador de Banca - Ismart</h3>
+    <header>
+        <img src="https://www.ismart.org.br/wp-content/uploads/2022/03/ISMART_logo.svg" alt="Ismart Logo">
+    </header>
+
+    <div id="chat-container">
+        <div id="chat"></div>
+        <br>
+        <input type="text" id="message" placeholder="Digite sua mensagem...">
+        <button onclick="sendMessage()">Enviar</button>
+        <button onclick="recordAudio()">🎤 Gravar</button>
+        <br><br>
+        <audio id="audioPlayer" controls></audio>
     </div>
 
-    <div id="chat" class="mb-3"></div>
+    <script>
+        async function sendMessage() {
+            const msg = document.getElementById("message").value;
+            if (!msg) return;
 
-    <div class="input-group mb-2">
-      <input id="textInput" type="text" class="form-control" placeholder="Escreva ou use 'Falar' para gravar" />
-      <button id="sendBtn" class="btn btn-primary">Enviar</button>
-      <button id="recBtn" class="btn btn-outline-secondary">🎤 Falar</button>
-    </div>
+            const chat = document.getElementById("chat");
+            chat.innerHTML += `<div class='message user'>Você: ${msg}</div>`;
 
-    <div class="mb-3">
-      <label class="form-label">Perfil da banca</label>
-      <select id="profile" class="form-select" style="width:200px">
-        <option value="1">1 - Rigor Acadêmico</option>
-        <option value="2">2 - Acolhedora</option>
-        <option value="3">3 - Desafiadora</option>
-      </select>
-    </div>
+            const response = await fetch("/chat", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({message: msg})
+            });
+            const data = await response.json();
+            chat.innerHTML += `<div class='message bot'>Banca: ${data.reply}</div>`;
 
-    <audio id="player" controls style="width:100%; display:none;"></audio>
-  </div>
+            const audioRes = await fetch("/tts", {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({text: data.reply})
+            });
+            const audioData = await audioRes.json();
+            document.getElementById("audioPlayer").src = audioData.audio_file;
 
-  <script>
-    const chat = document.getElementById('chat');
-    const textInput = document.getElementById('textInput');
-    const sendBtn = document.getElementById('sendBtn');
-    const recBtn = document.getElementById('recBtn');
-    const player = document.getElementById('player');
-    const profileSelect = document.getElementById('profile');
+            document.getElementById("message").value = "";
+        }
 
-    function appendUser(text) {
-      const d = document.createElement('div'); d.className='msg user'; d.innerHTML='<b>Você:</b> '+text; chat.appendChild(d); chat.scrollTop = chat.scrollHeight;
-    }
-    function appendAgent(text) {
-      const d = document.createElement('div'); d.className='msg agent'; d.innerHTML='<b>Banca:</b> '+text; chat.appendChild(d); chat.scrollTop = chat.scrollHeight;
-    }
+        async function recordAudio() {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream);
+            const chunks = [];
 
-    async function sendText(text) {
-      appendUser(text);
-      const res = await fetch('/chat', {
-        method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({message:text, profile:profileSelect.value})
-      });
-      const data = await res.json();
-      if (data.error) { appendAgent('Erro: '+data.error); return; }
-      appendAgent(data.reply);
+            mediaRecorder.ondataavailable = e => chunks.push(e.data);
+            mediaRecorder.onstop = async () => {
+                const blob = new Blob(chunks, { type: "audio/wav" });
+                const formData = new FormData();
+                formData.append("audio", blob, "input.wav");
 
-      // request audio from server
-      const speakResp = await fetch('/speak', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({text:data.reply}) });
-      const speakData = await speakResp.json();
-      if (speakData.audio) {
-        player.src = speakData.audio + '?t=' + Date.now();
-        player.style.display = 'block';
-        try { await player.play(); } catch(e) { /* autoplay may be blocked */ }
-      }
-    }
+                const response = await fetch("/stt", {
+                    method: "POST",
+                    body: formData
+                });
+                const data = await response.json();
 
-    sendBtn.onclick = () => {
-      const v = textInput.value.trim();
-      if (!v) return;
-      sendText(v);
-      textInput.value = '';
-    };
+                document.getElementById("message").value = data.text;
+            };
 
-    recBtn.onclick = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream);
-        const chunks = [];
-        mediaRecorder.ondataavailable = e => chunks.push(e.data);
-        mediaRecorder.onstop = async () => {
-          const blob = new Blob(chunks, { type: 'audio/webm' });
-          const fd = new FormData();
-          fd.append('audio', blob, 'input.webm');
-
-          const sttResp = await fetch('/stt', { method:'POST', body: fd });
-          const sttData = await sttResp.json();
-          const text = sttData.text || '';
-          textInput.value = text;
-          if (text) { sendText(text); }
-        };
-        mediaRecorder.start();
-        setTimeout(()=> mediaRecorder.stop(), 4000);
-      } catch (e) {
-        alert('Erro ao capturar microfone: '+e.message);
-      }
-    };
-  </script>
+            mediaRecorder.start();
+            setTimeout(() => mediaRecorder.stop(), 5000);
+        }
+    </script>
 </body>
 </html>
