@@ -1,72 +1,76 @@
 import os
-import json
-from flask import Flask, request, render_template, jsonify
+from flask import Flask, request, jsonify, render_template
 from openai import AzureOpenAI
 import azure.cognitiveservices.speech as speechsdk
 
 app = Flask(__name__)
 
-# Config OpenAI (Agents API)
+# Configuração do Azure OpenAI
 client = AzureOpenAI(
     api_key=os.getenv("AZURE_API_KEY"),
-    api_version="2024-10-01-preview",
+    api_version="2024-05-01-preview",
     azure_endpoint=os.getenv("ENDPOINT")
 )
 
-assistant_id = os.getenv("AZURE_AGENT_ID")
+AZURE_AGENT_ID = os.getenv("AZURE_AGENT_ID")
 
-# Config Speech SDK
-speech_key = os.getenv("SPEECH_KEY")
-speech_region = os.getenv("SPEECH_REGION")
+# Configuração do Azure Speech
+SPEECH_KEY = os.getenv("SPEECH_KEY")
+SPEECH_REGION = os.getenv("SPEECH_REGION")
 
-def speech_to_text(audio_file):
-    speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=speech_region)
-    audio_config = speechsdk.audio.AudioConfig(filename=audio_file)
-    recognizer = speechsdk.SpeechRecognizer(speech_config=speech_config, audio_config=audio_config)
-    result = recognizer.recognize_once()
-    return result.text if result.reason == speechsdk.ResultReason.RecognizedSpeech else ""
-
-def text_to_speech(text, filename="static/output.wav"):
-    speech_config = speechsdk.SpeechConfig(subscription=speech_key, region=speech_region)
-    audio_config = speechsdk.audio.AudioOutputConfig(filename=filename)
-    synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
-    synthesizer.speak_text_async(text).get()
-    return filename
 
 @app.route("/")
 def index():
     return render_template("index.html")
 
+
 @app.route("/chat", methods=["POST"])
 def chat():
-    user_input = request.json.get("message")
-    response = client.agents.chat_completions.create(
-        agent_id=assistant_id,
-        messages=[{"role": "user", "content": user_input}]
-    )
-    reply = response.output_text
+    try:
+        data = request.get_json()
+        user_message = data.get("message", "")
 
-    # salva conversa
-    with open("conversas.jsonl", "a") as f:
-        f.write(json.dumps({"user": user_input, "assistant": reply}) + "\n")
+        if not user_message:
+            return jsonify({"error": "Mensagem vazia"}), 400
 
-    return jsonify({"reply": reply})
+        response = client.agents.create_response(
+            agent_id=AZURE_AGENT_ID,
+            input=[{"role": "user", "content": user_message}]
+        )
 
-@app.route("/stt", methods=["POST"])
-def stt():
-    if "file" not in request.files:
-        return jsonify({"error": "no file"}), 400
-    file = request.files["file"]
-    filename = "temp_audio.wav"
-    file.save(filename)
-    text = speech_to_text(filename)
-    return jsonify({"text": text})
+        reply_blocks = []
+        for output in response.output:
+            if output["type"] == "message":
+                for c in output["content"]:
+                    if c["type"] == "output_text":
+                        reply_blocks.append(c["text"])
+
+        return jsonify({"reply": reply_blocks})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 @app.route("/tts", methods=["POST"])
 def tts():
-    text = request.json.get("text")
-    filename = text_to_speech(text)
-    return jsonify({"audio_url": "/" + filename})
+    try:
+        data = request.get_json()
+        text = data.get("text", "")
+
+        if not text:
+            return jsonify({"error": "Texto vazio"}), 400
+
+        speech_config = speechsdk.SpeechConfig(subscription=SPEECH_KEY, region=SPEECH_REGION)
+        audio_config = speechsdk.audio.AudioOutputConfig(filename="static/output.wav")
+
+        synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
+        synthesizer.speak_text_async(text).get()
+
+        return jsonify({"audio_url": "/static/output.wav"})
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
