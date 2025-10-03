@@ -1,71 +1,80 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <title>Simulador de Banca - Ismart</title>
-  <link rel="icon" type="image/svg+xml" href="https://www.ismart.org.br/wp-content/uploads/2022/03/ISMART_logo.svg">
-  <style>
-    body { font-family: Arial, sans-serif; margin: 30px; background: #f9f9f9; }
-    .chat-box { max-width: 700px; margin: auto; background: white; padding: 20px; border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
-    .user { color: blue; margin: 10px 0; }
-    .bot { color: green; margin: 10px 0; }
-    .typing { font-style: italic; color: gray; }
-  </style>
+    <meta charset="UTF-8">
+    <title>Simulador de Banca - Ismart</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: auto; }
+        #chat { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: scroll; }
+        .user { font-weight: bold; color: blue; }
+        .banca { font-weight: bold; color: green; }
+    </style>
 </head>
 <body>
-  <div class="chat-box">
-    <h2><img src="https://www.ismart.org.br/wp-content/uploads/2022/03/ISMART_logo.svg" alt="Ismart" width="80"> Simulador de Banca</h2>
+    <img src="https://www.ismart.org.br/wp-content/uploads/2022/03/ISMART_logo.svg" width="120">
+    <h2>Simulador de Banca - Ismart</h2>
+
     <div id="chat"></div>
-    <input type="text" id="message" placeholder="Digite aqui..." style="width:70%">
+
+    <textarea id="message" rows="3" placeholder="Digite sua mensagem..."></textarea><br>
     <button onclick="sendMessage()">Enviar</button>
+
     <audio id="audioPlayer" controls hidden></audio>
-  </div>
 
-  <script>
-    async function sendMessage() {
-      const msg = document.getElementById("message").value;
-      if (!msg) return;
+    <script>
+        const chatBox = document.getElementById("chat");
+        const input = document.getElementById("message");
+        const player = document.getElementById("audioPlayer");
 
-      const chat = document.getElementById("chat");
-      chat.innerHTML += `<div class="user">Você: ${msg}</div>`;
-      document.getElementById("message").value = "";
-
-      const response = await fetch("/chat", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({message: msg})
-      });
-
-      const data = await response.json();
-
-      if (data.reply) {
-        let fullText = "";
-        for (let block of data.reply) {
-          for (let i = 0; i < block.length; i++) {
-            fullText += block[i];
-            await new Promise(r => setTimeout(r, 40));
-            chat.innerHTML = chat.innerHTML.replace(/<div class="typing">.*<\/div>/, "");
-            chat.innerHTML += `<div class="typing bot">Banca: ${fullText}▌</div>`;
-            chat.scrollTop = chat.scrollHeight;
-          }
-          chat.innerHTML = chat.innerHTML.replace(/<div class="typing">.*<\/div>/, "");
-          chat.innerHTML += `<div class="bot">Banca: ${fullText}</div>`;
-        }
-
-        const ttsRes = await fetch("/tts", {
-          method: "POST",
-          headers: {"Content-Type": "application/json"},
-          body: JSON.stringify({ text: fullText })
+        // Permitir enviar com Enter
+        input.addEventListener("keydown", function(e) {
+            if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
         });
-        const ttsData = await ttsRes.json();
-        if (ttsData.audio_url) {
-          const player = document.getElementById("audioPlayer");
-          player.src = ttsData.audio_url;
-          player.hidden = false;
-          player.play();
+
+        async function sendMessage() {
+            const msg = input.value.trim();
+            if (!msg) return;
+
+            chatBox.innerHTML += `<p><span class="user">Você:</span> ${msg}</p>`;
+            input.value = "";
+
+            const response = await fetch("/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ message: msg })
+            });
+
+            const data = await response.json();
+            const reply = data.reply || "Erro na resposta.";
+
+            chatBox.innerHTML += `<p><span class="banca">Banca:</span> <span id="typing"></span></p>`;
+            simulateTyping(reply, document.getElementById("typing"));
+
+            // Chamar TTS
+            const tts = await fetch("/tts", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text: reply })
+            });
+            const ttsData = await tts.json();
+            player.src = ttsData.audio_url;
+            player.hidden = false;
+            player.play();
         }
-      }
-    }
-  </script>
+
+        // Simula "digitando"
+        function simulateTyping(text, element) {
+            let i = 0;
+            const interval = setInterval(() => {
+                element.textContent += text[i];
+                i++;
+                if (i >= text.length) clearInterval(interval);
+                chatBox.scrollTop = chatBox.scrollHeight;
+            }, 40);
+        }
+    </script>
 </body>
 </html>

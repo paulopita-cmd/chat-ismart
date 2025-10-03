@@ -5,72 +5,56 @@ import azure.cognitiveservices.speech as speechsdk
 
 app = Flask(__name__)
 
-# Configuração do Azure OpenAI
+# Azure OpenAI client
 client = AzureOpenAI(
     api_key=os.getenv("AZURE_API_KEY"),
-    api_version="2024-05-01-preview",
+    api_version="2024-10-01-preview",
     azure_endpoint=os.getenv("ENDPOINT")
 )
 
-AZURE_AGENT_ID = os.getenv("AZURE_AGENT_ID")
-
-# Configuração do Azure Speech
-SPEECH_KEY = os.getenv("SPEECH_KEY")
-SPEECH_REGION = os.getenv("SPEECH_REGION")
-
-
+# Rota principal (HTML)
 @app.route("/")
 def index():
     return render_template("index.html")
 
-
+# Rota de chat com streaming
 @app.route("/chat", methods=["POST"])
 def chat():
-    try:
-        data = request.get_json()
-        user_message = data.get("message", "")
+    user_message = request.json.get("message", "")
 
-        if not user_message:
-            return jsonify({"error": "Mensagem vazia"}), 400
+    stream = client.chat.completions.create(
+        model=os.getenv("AZURE_DEPLOYMENT"),
+        messages=[
+            {"role": "system", "content": "Você é um agente que ajuda jovens do Ismart a ensaiar suas apresentações de Projeto de Vida."},
+            {"role": "user", "content": user_message}
+        ],
+        stream=True
+    )
 
-        response = client.agents.create_response(
-            agent_id=AZURE_AGENT_ID,
-            input=[{"role": "user", "content": user_message}]
-        )
+    final_text = ""
+    for chunk in stream:
+        delta = chunk.choices[0].delta.content or ""
+        final_text += delta
 
-        reply_blocks = []
-        for output in response.output:
-            if output["type"] == "message":
-                for c in output["content"]:
-                    if c["type"] == "output_text":
-                        reply_blocks.append(c["text"])
+    return jsonify({"reply": final_text})
 
-        return jsonify({"reply": reply_blocks})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-
+# Rota para Text-to-Speech
 @app.route("/tts", methods=["POST"])
 def tts():
-    try:
-        data = request.get_json()
-        text = data.get("text", "")
+    text = request.json.get("text", "")
 
-        if not text:
-            return jsonify({"error": "Texto vazio"}), 400
+    speech_config = speechsdk.SpeechConfig(
+        subscription=os.getenv("SPEECH_KEY"),
+        region=os.getenv("SPEECH_REGION")
+    )
+    speech_config.speech_synthesis_voice_name = "pt-BR-FranciscaNeural"
 
-        speech_config = speechsdk.SpeechConfig(subscription=SPEECH_KEY, region=SPEECH_REGION)
-        audio_config = speechsdk.audio.AudioOutputConfig(filename="static/output.wav")
+    file_name = "static/response.wav"
+    audio_config = speechsdk.audio.AudioOutputConfig(filename=file_name)
+    synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
+    synthesizer.speak_text_async(text).get()
 
-        synthesizer = speechsdk.SpeechSynthesizer(speech_config=speech_config, audio_config=audio_config)
-        synthesizer.speak_text_async(text).get()
-
-        return jsonify({"audio_url": "/static/output.wav"})
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+    return jsonify({"audio_url": f"/{file_name}"})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
